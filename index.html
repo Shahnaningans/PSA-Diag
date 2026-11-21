@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b0c0e">
+<title>psadiag</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<!-- Connect -->
+<section id="screen-connect" class="screen active">
+  <div class="centered">
+    <div class="brand">psadiag</div>
+    <div class="brand-sub">Peugeot 206 · AL4 · ELM327</div>
+    <label class="check"><input type="checkbox" id="demo"> Demo mode (no car or adapter needed)</label>
+    <label class="check"><input type="checkbox" id="demoOff"> Demo: engine off (to try actuator tests / resets)</label>
+    <label class="check"><input type="checkbox" id="verbose"> Show adapter messages</label>
+    <button id="connectBtn" class="primary">Connect adapter</button>
+    <p class="hint">Turn the car's ignition on, plug in the ELM327. Tap Connect and pick your adapter. On iPhone you must open this page in the <b>Bluefy</b> browser (Safari can't use Bluetooth). On Android, use Chrome.</p>
+    <div id="status" class="status">Ready</div>
+  </div>
+</section>
+
+<!-- Home -->
+<section id="screen-home" class="screen">
+  <div class="topbar"><div class="title">psadiag</div></div>
+  <div class="home">
+    <div class="adapter">Adapter: <span id="adapterName">–</span></div>
+    <button id="goGearbox" class="bigbtn">Gearbox live <span>AL4 automatic — oil temp, pressures, gear, lock-up, speeds</span></button>
+    <button id="goEngine" class="bigbtn">Engine live <span>Standard OBD — revs, temperatures, trims, throttle, voltage</span></button>
+    <p class="hint">Each screen builds a live dashboard you can customise: tap <b>Edit</b> to add readings and choose how each one is shown — big number, round dial, or bar.</p>
+  </div>
+</section>
+
+<!-- Dashboard -->
+<section id="screen-dash" class="screen">
+  <div class="topbar">
+    <button id="backBtn" class="link">‹ Back</button>
+    <div class="title" id="dashTitle">Gearbox live</div>
+    <button id="toolsBtn" class="link right">Tools</button>
+    <button id="editBtn" class="link">Edit</button>
+  </div>
+  <div class="scroll">
+    <div class="ecu-row"><span class="dot"></span><span id="ecuPill">AL4 0xA4</span></div>
+    <div id="grid" class="grid"></div>
+    <div id="palette" class="palette"></div>
+    <div class="log-wrap">
+      <button id="logToggle" class="link">Adapter log ▾</button>
+      <div id="logPanel"><div id="log" class="log"></div></div>
+    </div>
+    <div class="foot-space"></div>
+  </div>
+  <div class="footer">
+    <div class="foot-left"><b>Updating</b> · <span id="footMeta">250 ms</span></div>
+    <button id="recBtn" class="rec">● Record</button>
+    <button id="stopBtn" class="stop">■ Stop</button>
+  </div>
+</section>
+
+<!-- Tools (faults, tests, service, Peugeot data) -->
+<section id="screen-tools" class="screen">
+  <div class="topbar">
+    <button id="tBack" class="link">‹ Back</button>
+    <div class="title" id="tTitle">Tools</div>
+  </div>
+  <div class="scroll" id="tBody"></div>
+  <div class="footer" id="tFooter" style="display:none"></div>
+</section>
+
+<script src="pack.js"></script>
+<script src="dbx.js"></script>
+<script src="diag.js"></script>
+<script src="catalog.js"></script>
+<script src="tools.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
