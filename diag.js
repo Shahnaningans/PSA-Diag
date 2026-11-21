@@ -126,6 +126,24 @@
       return [...new Set(out)];
     }
     async clear() { const m = await this.elm.requestObd('04', 6000); return m.some(x => x.length && x[0] === 0x44); }
+
+    // mode 01 PID 01: MIL + monitor completeness
+    async readiness() {
+      const d = await this.pid(0x01); if (!d || d.length < 4) return null;
+      const cont = ['Misfire', 'Fuel system', 'Components'];
+      const spark = ['Catalyst', 'Heated catalyst', 'Evaporative system', 'Secondary air', 'A/C refrigerant', 'Oxygen sensor', 'Oxygen sensor heater', 'EGR system'];
+      const diesel = ['NMHC catalyst', 'NOx after-treatment', '', 'Boost pressure', '', 'Exhaust gas sensor', 'Particulate filter', 'EGR/VVT system'];
+      const mon = [];
+      for (let i = 0; i < 3; i++) if (d[1] & (1 << i)) mon.push({ name: cont[i], complete: (d[1] & (1 << (i + 4))) === 0 });
+      const isDiesel = (d[1] & 0x08) !== 0, names = isDiesel ? diesel : spark;
+      for (let i = 0; i < 8; i++) if ((d[2] & (1 << i)) && names[i]) mon.push({ name: names[i], complete: (d[3] & (1 << i)) === 0 });
+      return { mil: (d[0] & 0x80) !== 0, count: d[0] & 0x7F, diesel: isDiesel, monitors: mon };
+    }
+    // mode 02 freeze frame
+    async freezePid(p) { const msgs = await this.elm.requestObd('02' + hex(p) + '00', 8000); const m = msgs.find(x => x.length >= 3 && x[0] === 0x42 && x[1] === p); return m ? m.slice(3) : null; }
+    async freezeDtc() { const d = await this.freezePid(0x02); if (!d || d.length < 2) return null; const c = d[0] << 8 | d[1]; return c === 0 ? null : 'PCBU'[c >> 14] + (c & 0x3FFF).toString(16).toUpperCase().padStart(4, '0'); }
+    // mode 09 vehicle info (02 VIN, 04 cal id)
+    async vehicleInfo(t) { const msgs = (await this.elm.requestObd('09' + hex(t), 10000)).filter(m => m.length >= 3 && m[0] === 0x49 && m[1] === t).sort((a, b) => a[2] - b[2]); if (!msgs.length) return null; const bytes = []; msgs.forEach(m => m.slice(3).forEach(b => { if (b >= 0x20 && b < 0x7F) bytes.push(b); })); const s = bytes.map(b => String.fromCharCode(b)).join('').trim(); return s || null; }
   }
 
   // ---------------------------------------------------------------- KWP2000 over K-line (Peugeot / AL4)

@@ -345,6 +345,14 @@
       });
       return b;
     }
+    // A looping synthetic drive with real gear changes and flare, so recorded demo drives are worth analysing.
+    const DSEQ = [[1.5, 0x00, 0], [2, 0x11, 1900], [0.6, 0x12, 2600], [3, 0x22, 1900], [0.6, 0x23, 2600], [3, 0xBB, 2100], [0.6, 0xBC, 2300], [3, 0xCC, 1800], [0.6, 0xC3, 2100], [2, 0x33, 2000], [0.6, 0x32, 1700], [2, 0x22, 1600]];
+    const DTOT = DSEQ.reduce((a, s) => a + s[0], 0);
+    function driveState() {
+      let p = ((Date.now() - t0) / 1000) % DTOT;
+      for (const s of DSEQ) { if (p < s[0]) { const settled = (s[1] & 0xF) === (s[1] >> 4); const inr = s[2]; const out = Math.max(380, Math.round(inr * (settled ? 0.85 : 0.7))); return { gearByte: s[1], inRpm: inr, outRpm: s[1] === 0 ? 0 : out, pedal: s[1] === 0 ? 6 : 24 }; } p -= s[0]; }
+      return { gearByte: 0x22, inRpm: 1600, outRpm: 1360, pedal: 24 };
+    }
     this._resp = (c) => {
       if (c.startsWith('AT')) { if (c.startsWith('ATSH')) header = c.slice(4).replace(/\s/g, '').substr(2, 2); if (c === 'ATSP0') header = ''; if (c === 'ATRV') return '14.1V'; if (c === 'ATZ') return 'ELM327 v1.5'; if (c === 'ATDP') return 'AUTO, ISO 14230-4'; return 'OK'; }
       c = c.replace(/\s+/g, '');   // the adapter accepts spaced hex; match on the compact form
@@ -357,11 +365,15 @@
         if (c === '81') return frame(0xA4, [0xC1, 0xD0, 0x8F]);
         if (c === '2180') return frame(0xA4, D.fromHex('61 80 96 59 83 86 80 00 04 96 59 83 86 80 0B 0F 20 02 00 03 38 D3 00 94 F8 00'));
         if (c === '21FE') return frame(0xA4, D.fromHex('61 FE 00 00 00 00 04 92 17 03 06 0B 0F 20 02 17 03 06 FE 00 00 00 01 62 78 48'));
-        if (c === '21C3') { const b = D.fromHex('61 C3 22 FF 40 D8 01 1A 5B 8C 08 10 0B 00 32 32 89 00 00 00 00 00 00'); b[2] = off ? 0x00 : 0x22; b[4] = off ? 0x70 : 0x40; b[11] = Math.round(wave(8, 90, 9000)); b[14] = Math.round(wave(60, 140, 9000)); return frame(0xA4, b); }
+        const ds = driveState();
+        if (c === '21C3') { const b = D.fromHex('61 C3 22 FF 40 D8 01 1A 5B 8C 08 10 0B 00 32 32 89 00 00 00 00 00 00'); b[2] = off ? 0x00 : ds.gearByte; b[4] = off ? 0x70 : 0x40; b[11] = Math.round((off ? 6 : ds.pedal) / 0.39); b[14] = Math.round((100 + (off ? 0 : 30)) / 2); return frame(0xA4, b); }
         if (c === '21C4') { const b = D.fromHex('61 C4 ' + Array(25).fill('00').join(' ')); b[5] = 0x80; return frame(0xA4, b); }
-        if (c === '21C5') { const b = D.fromHex('61 C5 00 FF 70 19 17 00 34 2D 10 00 03 00 40 00 1B 3B 33 FA 00 61 82 08 02 00 08 04'); b[5] = Math.round(idleRpm / 32); b[6] = Math.round((off ? 0 : wave(700, 2800, 9000)) / 32); b[7] = Math.round((off ? 0 : wave(0, 2400, 9000)) / 32); b[21] = Math.round(wave(60, 95, 60000)) + 50; b[16] = Math.round(wave(20, 90, 9000)); b[18] = Math.round(wave(40, 110, 9000)); b[19] = Math.round(wave(40, 250, 9000)); return frame(0xA4, b); }
+        if (c === '21C5') { const b = D.fromHex('61 C5 00 FF 70 19 17 00 34 2D 10 00 03 00 40 00 1B 3B 33 FA 00 61 82 08 02 00 08 04'); const inr = off ? 0 : ds.inRpm; b[5] = Math.round((off ? 0 : Math.max(800, inr)) / 32); b[6] = Math.round(inr / 32); b[7] = Math.round((off ? 0 : ds.outRpm) / 32); b[21] = Math.round(wave(60, 95, 60000)) + 50; b[16] = Math.round(wave(20, 90, 9000)); b[18] = Math.round(wave(40, 110, 9000)); b[19] = Math.round(wave(40, 250, 9000)); return frame(0xA4, b); }
         if (c === '21CB') return frame(0xA4, D.fromHex('61 CB 41 CA 7A 33'));
         if (c === '21CA' || c === '21C0') return frame(0xA4, D.fromHex('61 ' + c.substr(2, 2) + ' 00 00 00'));
+        if (c === '21C1') { const b = D.fromHex('61 C1 ' + Array(22).fill('00').join(' ')); b[19] = 0x05; return frame(0xA4, b); }
+        if (c.startsWith('31C3') && c.length === 6) return frame(0xA4, [0x71, 0x02]);
+        if (c === '1180') return frame(0xA4, [0x51, 0x80]);
         if (c === '17FF00') return frame(0xA4, [0x57, 0x00]);
         if (c === '14FF00') return frame(0xA4, [0x54, 0xFF, 0x00]);
         if (c.startsWith('1400') && c.length === 6) return frame(0xA4, [0x54, 0x00, parseInt(c.substr(4, 2), 16)]);
@@ -377,14 +389,19 @@
         if (c === '14FF00') return frame(0x10, [0x54, 0xFF, 0x00]);
         if (c === '11FF') return frame(0x10, [0x51]);
         if (c.startsWith('30') && c.length === 6) return testResp(0x10);
+        if (c === '21CF00' || c === '21CF') return frame(0x10, D.fromHex('61 CF 01 00 00 2A 14 03 25 01 B5 F2 03 01'));
         if (c.startsWith('21') && c.length >= 4) { const b = engBlock(parseInt(c.substr(2, 2), 16), idleRpm); if (b) return frame(0x10, b); }
         return frame(0x10, [0x7F, parseInt(c.substr(0, 2), 16), 0x11]);
       }
       // engine OBD
       const pid = c.substr(2, 2);
-      const r = { '0C': [rpm * 4 >> 8, rpm * 4 & 0xFF], '0D': [Math.round(wave(0, 90, 9000))], '05': [Math.round(wave(80, 95, 60000)) + 40], '0F': [64], '0B': [Math.round(wave(30, 70, 9000))], '04': [Math.round(wave(40, 180, 9000))], '11': [Math.round(wave(30, 120, 9000))], '0E': [148], '06': [128 + Math.round(wave(-6, 6, 7000))], '07': [132], '14': [Math.round(wave(20, 180, 2000))], '15': [150], '42': [0x37, 0x2C], '00': [0xBE, 0x3E, 0xB8, 0x11], '20': [0x80, 0, 0, 0], '40': [0x40, 0, 0, 0] };
+      const r = { '01': [off ? 0x00 : 0x80, 0x07, 0x65, off ? 0x65 : 0x04], '0C': [idleRpm * 4 >> 8, idleRpm * 4 & 0xFF], '0D': [off ? 0 : Math.round(wave(0, 90, 9000))], '05': [Math.round(wave(80, 95, 60000)) + 40], '0F': [64], '0B': [off ? 101 : Math.round(wave(30, 70, 9000))], '04': [Math.round(wave(40, 180, 9000))], '11': [off ? 16 : Math.round(wave(30, 120, 9000))], '0E': [148], '06': [128 + Math.round(wave(-6, 6, 7000))], '07': [132], '14': [Math.round(wave(20, 180, 2000))], '15': [150], '42': [0x37, 0x2C], '00': [0xBE, 0x3E, 0xB8, 0x11], '20': [0x80, 0, 0, 0], '40': [0x40, 0, 0, 0] };
+      const hx2 = a => a.map(x => x.toString(16).toUpperCase().padStart(2, '0')).join(' ');
       if (c === '03' || c === '07') return '4' + c[1] + ' 00 00 00';
-      if (r[pid]) return '41 ' + pid + ' ' + r[pid].map(x => x.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+      if (c === '0902') return '49 02 01 00 00 00 56\r49 02 02 46 33 32 44\r49 02 03 45 4D 4F 32\r49 02 04 30 36 43 43\r49 02 05 32 30 30 36';
+      if (c === '0904') return '49 04 01 30 31 32 30\r49 04 02 33 34 41 20';
+      if (c.length === 6 && c.startsWith('02')) { const fp = c.substr(2, 2); if (fp === '02') return '42 02 00 01 13'; if (r[fp]) return '42 ' + fp + ' 00 ' + hx2(r[fp]); return '42 ' + fp + ' 00 00 00'; }
+      if (r[pid]) return '41 ' + pid + ' ' + hx2(r[pid]);
       return 'NO DATA';
     };
   }
