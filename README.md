@@ -1,9 +1,7 @@
-# psadiag web — live diagnostics in the browser
+# psadiag web: live diagnostics in the browser
 
 A web version of psadiag for the **Peugeot 206 / 206 CC (AL4 automatic)** that talks to a **BLE ELM327** adapter straight
-from the browser, with a **custom dashboard** you build yourself (big numbers, round dials, or bars).
-
-![it looks like the mockup: gear + lever cards, a 3-up grid of readings, a switches list]
+from the browser, with a **custom dashboard** you build yourself.
 
 ## What you need
 
@@ -11,37 +9,31 @@ from the browser, with a **custom dashboard** you build yourself (big numbers, r
 - On **iPhone**: the free **Bluefy – Web BLE Browser** app (Safari and Chrome on iOS can't use Bluetooth).
 - On **Android**: just **Chrome**.
 
-## Run it — two ways
-
-**A. Host it (recommended, works on any phone):**
-1. Put the five files (`index.html`, `app.css`, `diag.js`, `catalog.js`, `README.md`) in a **GitHub repo**.
-2. Repo **Settings → Pages → Deploy from branch → main / root**. GitHub gives you an `https://…github.io/…` link.
-3. On the phone, open that link **in Bluefy** (iPhone) or **Chrome** (Android).
-
-**B. Local file (iPhone, no hosting):** AirDrop/email `index.html` + the 4 other files to the phone into one folder, then
-open `index.html` in **Bluefy** (Bluefy → menu → open file). Web Bluetooth works from a local file too.
-
-> It must be **https** or a local file — plain `http://` (except `localhost`) won't allow Bluetooth. GitHub Pages is https.
+## Run it 
+**In web browser**
+1. Open up **Bluefy** (iPhone) or **Chrome** (Android).
+2. Enter https://shahnaningans.github.io/PSA-Diag/
+3. Connect to your ELM device
 
 ## Using it
 
 1. Ignition **on**, adapter plugged in. Open the page, tap **Connect adapter**, pick your adapter from the list.
 2. Tap **Gearbox live** or **Engine live**. The dashboard starts updating ~4×/second.
-3. **Build your own dashboard:** tap **Edit**. On each reading, pick how it's shown — `123` number, `◔` dial, `▭` bar —
+3. **Build your own dashboard:** tap **Edit**. On each reading, pick how it's shown:  `123` number, `◔` dial, `▭` bar 
    reorder with `↑ ↓`, remove with `×`, and **add more readings** from the list at the bottom. Your layout is saved on the
    phone. "Reset to default layout" restores it.
 4. **Record** logs the live data; tap again to download a CSV. **Stop** pauses; tap to resume.
 5. Readings that look wrong are flagged in amber/red with a short reason (overheating, weak charging, hot gearbox oil…).
-6. **Tools** (top-right on either dashboard) — the manufacturer features:
+6. **Tools** (top-right on either dashboard) the manufacturer features:
    - **Read fault codes** with the conditions stored with each fault, and clear them.
-   - **Actuator tests** — drive a part to check it (gearbox solenoids; engine injectors, coils, fuel pump, fans, throttle…). Safety checks run first (engine off, stationary, lever in P); watch/listen for it working.
-   - **Live manufacturer data** — everything the dealer tool shows, decoded.
+   - **Actuator tests** drive a part to check it (gearbox solenoids; engine injectors, coils, fuel pump, fans, throttle…). Safety checks run first (engine off, stationary, lever in P); watch/listen for it working.
+   - **Live manufacturer data**  everything the dealer tool shows, decoded.
    - **Reset learned values** (engine throttle/idle/mixture, or the gearbox autoadaptives) and the **oil wear counter** (read, and reset after an oil change).
-   - On the engine, tap **Switch to Peugeot mode** first — it identifies the engine computer and unlocks all of the above. (Faults via standard OBD are available without it.)
+   - On the engine, tap **Switch to Peugeot mode** first it identifies the engine computer and unlocks all of the above. (Faults via standard OBD are available without it.)
 
 To try the tools without a car, tick **Demo: engine off** on the connect screen (tests need the engine off).
 
-Try it first with **Demo mode** (on the connect screen) — it runs a synthetic car so you can see everything without the
+Try it first with **Demo mode** (on the connect screen) it runs a synthetic car so you can see everything without the
 adapter.
 
 ## What it reads
@@ -55,14 +47,7 @@ adapter.
 
 ## Notes & limits
 
-- **BLE only** (Web Bluetooth can't use Wi-Fi or old Bluetooth-3.0 adapters). Yours is BLE, so fine.
-- Engine readings here are **standard OBD**. The Windows psadiag also does the engine's Peugeot mode and the actuator
-  tests, resets, oil-counter and coding writes — those involve changing the car, so they stay in the full tool for now.
-- **Don't operate the phone while driving** — a passenger holds it, or use Record and review the CSV afterwards.
-- If the adapter doesn't appear when you tap Connect: make sure you're in **Bluefy** (not Safari), the ignition is on, and
-  the adapter isn't already connected to another app (Car Scanner) — close that first.
-
-## Files (all of them must be in the same folder)
-`index.html` shell · `app.css` theme · `diag.js` adapter/ELM327/OBD/KWP · `catalog.js` dashboard parameters + guidance ·
-`pack.js` Diagbox definitions (engine + AL4) · `dbx.js` Diagbox decoder · `tools.js` faults/tests/service/Peugeot ·
-`app.js` UI, dashboards, builder, CSV. No build step, no dependencies.
+- **BLE only** (Web Bluetooth can't use Wi-Fi or old Bluetooth-3.0 adapters). 
+- Engine readings here are **standard OBD**.
+- **Don't operate the phone while driving** use Record and review the CSV afterwards.
+- If the adapter doesn't appear when you tap Connect: make sure you're in **Bluefy** (not Safari), and the ignition is on.
