@@ -20,13 +20,23 @@
   // All full 128-bit UUID strings (Bluefy on iOS rejects an array that mixes in a numeric 16-bit alias).
   const BLE_SERVICES = ['0000fff0-0000-1000-8000-00805f9b34fb', '0000ffe0-0000-1000-8000-00805f9b34fb', '0000ffe5-0000-1000-8000-00805f9b34fb', '000018f0-0000-1000-8000-00805f9b34fb', '0000ffe9-0000-1000-8000-00805f9b34fb', '6e400001-b5a3-f393-e0a9-e50e24dcca9e'];
 
+  // Narrow the chooser to things that look like OBD adapters (by serial service or name), so it isn't a wall of
+  // unnamed devices. Each entry is OR'd. Falls back to "show everything" when nothing matches.
+  const OBD_FILTERS = [
+    { services: ['0000fff0-0000-1000-8000-00805f9b34fb'] }, { services: ['0000ffe0-0000-1000-8000-00805f9b34fb'] },
+    { services: ['0000ffe5-0000-1000-8000-00805f9b34fb'] }, { services: ['000018f0-0000-1000-8000-00805f9b34fb'] },
+    { namePrefix: 'OBD' }, { namePrefix: 'obd' }, { namePrefix: 'V-LINK' }, { namePrefix: 'VLINK' }, { namePrefix: 'Vlink' },
+    { namePrefix: 'vLinker' }, { namePrefix: 'IOS' }, { namePrefix: 'Android-Vlink' }, { namePrefix: 'Viecar' },
+    { namePrefix: 'Vgate' }, { namePrefix: 'ELM' }, { namePrefix: 'Konnwei' }, { namePrefix: 'ANDROID' },
+  ];
+
   class BleTransport {
     constructor() { this.buf = ''; this._write = null; this.description = 'BLE ELM327'; this.device = null; }
-    async connect() {
+    async connect(showAll) {
       if (!navigator.bluetooth) throw new Error('This browser has no Web Bluetooth. On iPhone use the Bluefy browser; on Android use Chrome.');
       let device;
       try {
-        device = await navigator.bluetooth.requestDevice({ optionalServices: BLE_SERVICES, acceptAllDevices: true });
+        device = await navigator.bluetooth.requestDevice(showAll ? { optionalServices: BLE_SERVICES, acceptAllDevices: true } : { optionalServices: BLE_SERVICES, filters: OBD_FILTERS });
       } catch (e) {
         if (e && e.name === 'NotFoundError') throw new Error('No adapter was picked. Tap your adapter in the list, or if it is not there see the connect-screen tips.');
         throw new Error('Device picker error: ' + ((e && e.message) || e) + '. On iPhone, make sure the adapter is NOT paired in Settings › Bluetooth (Forget it there), then try again.');

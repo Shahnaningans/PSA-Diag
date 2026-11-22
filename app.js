@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Diag, C = window.Catalog, P = C.PARAMS, fmt = C.fmt, Dbx = window.Dbx;
-  const VERSION = 'psadiag web v1.4 · build 2026-11-22c';   // bump this on every change
+  const VERSION = 'psadiag web v1.5 · build 2026-11-22d';   // bump this on every change
   const $ = s => document.querySelector(s);
   const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
 
@@ -17,14 +17,14 @@
   function save() { try { localStorage.setItem('psadiag.layouts', JSON.stringify(state.layouts)); } catch (e) {} }
 
   // ---------------------------------------------------------------- connection
-  async function connect() {
+  async function connect(showAll) {
     try {
       setStatus('Connecting…');
       if (state.demo) { state.transport = new DemoTransport(); }
       else state.transport = new D.BleTransport();
       state.elm = new D.Elm327(state.transport);
       if ($('#verbose').checked) state.elm.log = m => logLine(m, 'dim');
-      await state.transport.connect();
+      await state.transport.connect(showAll);
       await state.elm.initialise();
       state.transport.onDisconnect = () => { stopPolling(); setStatus('Adapter disconnected'); showScreen('connect'); };
       $('#adapterName').textContent = state.transport.description;
@@ -264,7 +264,8 @@
 
   // ---------------------------------------------------------------- wire up
   window.addEventListener('DOMContentLoaded', () => {
-    $('#connectBtn').onclick = connect;
+    $('#connectBtn').onclick = () => connect(false);
+    $('#connectAll').onclick = () => connect(true);
     $('#demo').onchange = e => { state.demo = e.target.checked; };
     $('#goGearbox').onclick = () => openMode('gearbox');
     $('#goEngine').onclick = () => openMode('engine');
