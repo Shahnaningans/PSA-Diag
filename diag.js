@@ -33,13 +33,14 @@
   class BleTransport {
     constructor() { this.buf = ''; this._write = null; this.description = 'BLE ELM327'; this.device = null; }
     async connect(showAll) {
-      if (!navigator.bluetooth) throw new Error('This browser has no Web Bluetooth. On iPhone use the Bluefy browser; on Android use Chrome.');
+      // No browser gate — always try. If a browser has no Web Bluetooth you'll see its own error, not a block from us.
       let device;
       try {
         device = await navigator.bluetooth.requestDevice(showAll ? { optionalServices: BLE_SERVICES, acceptAllDevices: true } : { optionalServices: BLE_SERVICES, filters: OBD_FILTERS });
       } catch (e) {
-        if (e && e.name === 'NotFoundError') throw new Error('No adapter was picked. Tap your adapter in the list, or if it is not there see the connect-screen tips.');
-        throw new Error('Device picker error: ' + ((e && e.message) || e) + '. On iPhone, make sure the adapter is NOT paired in Settings › Bluetooth (Forget it there), then try again.');
+        if (e && e.name === 'NotFoundError') throw new Error('No adapter was picked (or none matched). Tap your adapter, or use "Show all Bluetooth devices".');
+        if (!navigator.bluetooth) throw new Error("This browser didn't offer Bluetooth (" + ((e && e.message) || e) + "). Safari on iPhone can't; try Bluefy, or Chrome/Edge on a laptop.");
+        throw new Error('Device picker error: ' + ((e && e.message) || e));
       }
       this.device = device; this.description = device.name || 'BLE ELM327';
       const server = await device.gatt.connect();
@@ -168,15 +169,27 @@
   class Kwp {
     constructor(elm, target) { this.elm = elm; this.target = target; }
     async connect() {
-      // If OBD was used, the engine stays in that session ~5 s and refuses Peugeot requests. Close and wait.
-      if (this.target === ENGINE && this.elm.obdSessionOpen) { try { await this.elm.at('ATPC'); } catch (e) {} await sleep(6000); this.elm.obdSessionOpen = false; }
-      await this.elm.at('ATPC'); await sleep(400);
-      await this.elm.at('ATSP5');
-      await this.elm.at('ATSH 81 ' + hex(this.target) + ' F1');
-      await this.elm.at('ATAL'); await this.elm.at('ATH1');
-      await this.elm.at('ATWM 81 ' + hex(this.target) + ' F1 3E');
-      const r = await this.send([0x81]);
-      return !!(r && (r.ok || r.negative != null));
+      // Switching from a standard-OBD session to any K-line computer needs the line idle first (the engine also
+      // keeps its OBD session ~5 s and refuses Peugeot requests while it's open). Close it and wait.
+      if (this.elm.obdSessionOpen) {
+        try { await this.elm.at('ATPC'); } catch (e) {}
+        await sleep(this.target === ENGINE ? 6000 : 2500);
+        this.elm.obdSessionOpen = false;
+      }
+      // Clone adapters often miss the first K-line wake-up (especially right after OBD); try a few times.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          await this.elm.at('ATPC'); await sleep(attempt === 0 ? 400 : 1300);
+          await this.elm.at('ATSP5');
+          await this.elm.at('ATSH 81 ' + hex(this.target) + ' F1');
+          await this.elm.at('ATAL'); await this.elm.at('ATH1');
+          await this.elm.at('ATWM 81 ' + hex(this.target) + ' F1 3E');
+          const r = await this.send([0x81]);
+          if (r && (r.ok || r.negative != null)) return true;
+        } catch (e) { /* retry */ }
+        await sleep(700);
+      }
+      return false;
     }
     // Returns {ok: data[]|null, negative: code|null}. Filters to frames from our target; handles 0x78 pending.
     async send(req) {

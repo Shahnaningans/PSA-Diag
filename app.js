@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Diag, C = window.Catalog, P = C.PARAMS, fmt = C.fmt, Dbx = window.Dbx;
-  const VERSION = 'psadiag web v1.5 · build 2026-11-22d';   // bump this on every change
+  const VERSION = 'psadiag web v1.6 · build 2026-11-22e';   // bump this on every change
   const $ = s => document.querySelector(s);
   const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
 
@@ -62,7 +62,7 @@
   function neededSources() {
     const items = state.layouts[state.mode];
     if (state.mode === 'gearbox') { const s = new Set(); items.forEach(it => (P[it.id].lids || []).forEach(l => s.add(l))); return [...s]; }
-    return [...new Set(items.map(it => P[it.id].pid).filter(x => x != null))];
+    return [...new Set(items.flatMap(it => { const p = P[it.id]; return p.src === 'computed' ? (p.needs || []) : (p.pid != null ? [p.pid] : []); }))];
   }
 
   async function pollOnce() {
@@ -82,7 +82,11 @@
     for (const it of items) {
       const p = P[it.id];
       let v = null;
-      try { v = state.mode === 'gearbox' ? p.decode(getter) : p.decode(getter(p.pid)); } catch (e) { v = null; }
+      try {
+        if (state.mode === 'gearbox') v = p.decode(getter);
+        else if (p.src === 'computed') { const n = p.compute(getter); v = n == null ? null : { n }; }
+        else v = p.decode(getter(p.pid));
+      } catch (e) { v = null; }
       values[it.id] = v;
       if (v && v.n != null) all[it.id] = v.n;
     }

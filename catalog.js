@@ -14,6 +14,33 @@
   const kBit = (lid, idx, mask, onText, offText, bad) => ({ src: 'kwp', lids: [lid], decode: g => { const v = bit(g(lid), idx, mask); return v == null ? null : { n: v ? 1 : 0, text: v ? onText : offText, bad: bad && v }; } });
   const oNum = (pid, fn) => ({ src: 'obd', pid, decode: d => { const v = fn(d); return v == null ? null : { n: v }; } });
 
+  // Instant fuel economy (UK mpg). Uses OBD fuel rate (0x5E) if the car has it, else MAF (0x10), else a speed-density
+  // estimate from manifold pressure + rpm + intake temp (this 1.6 petrol has no MAF, so the estimate is what's used —
+  // it's approximate, within ~10-15%). Stationary = 0; on the overrun (fuel cut) it's capped.
+  function mpgFrom(g) {
+    const spd = g(0x0D); if (!spd || !spd.length) return null;
+    const mph = spd[0] * 0.621371;
+    if (mph < 1) return 0;
+    let lph = null;
+    const fr = g(0x5E);
+    if (fr && fr.length >= 2) lph = (fr[0] * 256 + fr[1]) * 0.05;
+    else {
+      const maf = g(0x10);
+      if (maf && maf.length >= 2) lph = ((maf[0] * 256 + maf[1]) / 100) / 14.7 / 745 * 3600;
+      else {
+        const map = g(0x0B), rpm = g(0x0C), iat = g(0x0F);
+        if (map && map.length && rpm && rpm.length >= 2 && iat && iat.length) {
+          const MAP = map[0], RPM = (rpm[0] * 256 + rpm[1]) / 4, Tk = (iat[0] - 40) + 273.15;
+          const gs = (MAP * 1000 / (287 * Tk)) * ((RPM / 60) * (0.0016 / 2) * 0.80) * 1000;
+          lph = gs / 14.7 / 745 * 3600;
+        }
+      }
+    }
+    if (lph == null) return null;
+    if (lph <= 0.05) return 80;
+    return Math.min(80, mph / (lph / 4.546));
+  }
+
   const GEARS = { 0x00: 'N', 0x11: '1st', 0x22: '2nd', 0x33: '3rd', 0x44: '4th' };
   const LEVER = { 0x10: '1', 0x20: '2', 0x30: '3', 0x40: 'D', 0x50: 'R', 0x60: 'N', 0x70: 'P' };
   const PROG = { 1: 'Manual', 2: 'Sport' };
@@ -59,7 +86,8 @@
 
     // ---------- engine (standard OBD) ----------
     engineRpm: Object.assign({ group: 'engine', label: 'Engine speed', unit: 'rpm', min: 0, max: 7000, def: true, widgets: ['number', 'dial', 'bar'] }, oNum(0x0C, d => u(d, 0, 2) == null ? null : u(d, 0, 2) / 4)),
-    speed: Object.assign({ group: 'engine', label: 'Vehicle speed', unit: 'km/h', min: 0, max: 200, def: true, widgets: ['number', 'dial', 'bar'] }, oNum(0x0D, d => u(d, 0))),
+    speed: Object.assign({ group: 'engine', label: 'Vehicle speed', unit: 'mph', min: 0, max: 130, def: true, widgets: ['number', 'dial', 'bar'] }, oNum(0x0D, d => u(d, 0) == null ? null : u(d, 0) * 0.621371)),
+    mpg: { group: 'engine', label: 'Fuel economy (instant)', unit: 'mpg', min: 0, max: 80, dp: 1, def: true, widgets: ['number', 'dial', 'bar'], src: 'computed', needs: [0x0D, 0x5E, 0x10, 0x0B, 0x0C, 0x0F], compute: mpgFrom },
     coolant: Object.assign({ group: 'engine', label: 'Coolant temperature', unit: '°C', min: -40, max: 130, def: true, widgets: ['number', 'dial', 'bar'], health: H.coolant }, oNum(0x05, d => u(d, 0) == null ? null : u(d, 0) - 40)),
     iat: Object.assign({ group: 'engine', label: 'Intake air temp', unit: '°C', min: -20, max: 90, widgets: ['number', 'dial', 'bar'] }, oNum(0x0F, d => u(d, 0) == null ? null : u(d, 0) - 40)),
     map: Object.assign({ group: 'engine', label: 'Manifold pressure', unit: 'kPa', min: 0, max: 255, widgets: ['number', 'dial', 'bar'] }, oNum(0x0B, d => u(d, 0))),
@@ -83,9 +111,9 @@
       { id: 'brake1', w: 'switch' }, { id: 'brake2', w: 'switch' }, { id: 'kickdown', w: 'switch' }, { id: 'pn', w: 'switch' },
     ],
     engine: [
-      { id: 'engineRpm', w: 'dial' }, { id: 'speed', w: 'number' }, { id: 'coolant', w: 'number' },
-      { id: 'throttle', w: 'bar' }, { id: 'load', w: 'bar' }, { id: 'voltage', w: 'number' },
-      { id: 'stft', w: 'number' }, { id: 'ltft', w: 'number' },
+      { id: 'engineRpm', w: 'dial' }, { id: 'speed', w: 'number' }, { id: 'mpg', w: 'number' },
+      { id: 'coolant', w: 'number' }, { id: 'throttle', w: 'bar' }, { id: 'load', w: 'bar' },
+      { id: 'voltage', w: 'number' }, { id: 'stft', w: 'number' }, { id: 'ltft', w: 'number' },
     ],
   };
 
