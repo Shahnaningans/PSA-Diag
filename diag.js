@@ -17,13 +17,20 @@
     { svc: '0000ffe5-0000-1000-8000-00805f9b34fb', write: '0000ffe9-0000-1000-8000-00805f9b34fb', notify: '0000ffe4-0000-1000-8000-00805f9b34fb' },
     { svc: '18f0', write: '2af1', notify: '2af0' },
   ];
-  const BLE_SERVICES = ['0000fff0-0000-1000-8000-00805f9b34fb', '0000ffe0-0000-1000-8000-00805f9b34fb', '0000ffe5-0000-1000-8000-00805f9b34fb', 0x18f0];
+  // All full 128-bit UUID strings (Bluefy on iOS rejects an array that mixes in a numeric 16-bit alias).
+  const BLE_SERVICES = ['0000fff0-0000-1000-8000-00805f9b34fb', '0000ffe0-0000-1000-8000-00805f9b34fb', '0000ffe5-0000-1000-8000-00805f9b34fb', '000018f0-0000-1000-8000-00805f9b34fb', '0000ffe9-0000-1000-8000-00805f9b34fb', '6e400001-b5a3-f393-e0a9-e50e24dcca9e'];
 
   class BleTransport {
     constructor() { this.buf = ''; this._write = null; this.description = 'BLE ELM327'; this.device = null; }
     async connect() {
       if (!navigator.bluetooth) throw new Error('This browser has no Web Bluetooth. On iPhone use the Bluefy browser; on Android use Chrome.');
-      const device = await navigator.bluetooth.requestDevice({ optionalServices: BLE_SERVICES, acceptAllDevices: true });
+      let device;
+      try {
+        device = await navigator.bluetooth.requestDevice({ optionalServices: BLE_SERVICES, acceptAllDevices: true });
+      } catch (e) {
+        if (e && e.name === 'NotFoundError') throw new Error('No adapter was picked. Tap your adapter in the list, or if it is not there see the connect-screen tips.');
+        throw new Error('Device picker error: ' + ((e && e.message) || e) + '. On iPhone, make sure the adapter is NOT paired in Settings › Bluetooth (Forget it there), then try again.');
+      }
       this.device = device; this.description = device.name || 'BLE ELM327';
       const server = await device.gatt.connect();
       let lastErr;

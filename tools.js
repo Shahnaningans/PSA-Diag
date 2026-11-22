@@ -31,6 +31,7 @@
 
     if (ctx.kind === 'engine' && !ctx.ecu) {
       b.appendChild(toolBtn('Read fault codes (OBD)', 'Stored and pending engine codes.', obdFaults));
+      b.appendChild(toolBtn('Record & review a drive', 'Log the engine while you drive, then review the readings and what looks out of range; open saved logs too.', engineDrives));
       b.appendChild(toolBtn('Emissions readiness (MOT)', 'Warning light and which self-tests have completed.', readiness));
       b.appendChild(toolBtn('Freeze frame', 'Engine conditions when the stored fault was set.', freeze));
       b.appendChild(toolBtn('Vehicle / calibration ID', 'VIN and calibration ID, if the engine reports them.', vehicleId));
@@ -295,14 +296,17 @@
     fi.onchange = async () => { const files = [...fi.files]; if (!files.length) return; const loaded = []; for (const f of files) { const text = await f.text(); loaded.push({ name: f.name.replace(/\.csv$/i, ''), load: A.Load(text) }); } showAnalysis(loaded); };
     b.appendChild(toolBtn('Open CSV file(s)', 'One to analyse, two to compare, several for a trend. Opens files saved here or by the Windows tool.', () => fi.click()));
     b.appendChild(fi);
-    if (recordings.length) { b.appendChild(el('div', 'section-h', 'RECORDED THIS SESSION')); recordings.forEach(rec => b.appendChild(toolBtn(rec.name, 'Tap to analyse', () => showAnalysis([{ name: rec.name, load: A.Load(rec.text) }])))); }
+    const mine = recordings.filter(r => r.kind !== 'engine');
+    if (mine.length) { b.appendChild(el('div', 'section-h', 'RECORDED THIS SESSION')); mine.forEach(rec => b.appendChild(toolBtn(rec.name, 'Tap to analyse', () => showAnalysis([{ name: rec.name, load: A.Load(rec.text) }])))); }
   }
-  function showAnalysis(loaded) {
-    const b = header(loaded.length === 1 ? 'Drive analysis' : loaded.length === 2 ? 'Comparison' : 'Trend', drives);
+  function showAnalysis(loaded, backFn) {
+    const isGearbox = loaded[0].load.headers.indexOf('gear') >= 0;
+    const b = header(loaded.length > 1 ? (loaded.length === 2 ? 'Comparison' : 'Trend') : (isGearbox ? 'Drive analysis' : 'Readings & guidance'), backFn || drives);
     let text;
-    if (loaded.length === 1) text = A.analyse(loaded[0].load.rows, loaded[0].name) + '\n' + A.guidance(loaded[0].load);
-    else if (loaded.length === 2) { const o = loaded.slice().sort((a, b) => (a.load.rows[0] ? a.load.rows[0].time : 0) - (b.load.rows[0] ? b.load.rows[0].time : 0)); text = A.compare({ name: o[0].name, rows: o[0].load.rows }, { name: o[1].name, rows: o[1].load.rows }); }
-    else text = A.trend(loaded.map(l => ({ name: l.name, rows: l.load.rows })));
+    if (loaded.length === 1) text = (isGearbox ? A.analyse(loaded[0].load.rows, loaded[0].name) + '\n' : loaded[0].name + '\n\n') + A.guidance(loaded[0].load);
+    else if (loaded.length === 2 && isGearbox) { const o = loaded.slice().sort((a, b) => (a.load.rows[0] ? a.load.rows[0].time : 0) - (b.load.rows[0] ? b.load.rows[0].time : 0)); text = A.compare({ name: o[0].name, rows: o[0].load.rows }, { name: o[1].name, rows: o[1].load.rows }); }
+    else if (isGearbox) text = A.trend(loaded.map(l => ({ name: l.name, rows: l.load.rows })));
+    else text = loaded.map(l => l.name + '\n' + A.guidance(l.load)).join('\n────────\n');
     preBox(b, text);
   }
   function recordDrive() {
@@ -319,9 +323,42 @@
     stop.onclick = () => {
       stopLive(); $('#tFooter').style.display = 'none'; $('#tFooter').innerHTML = '';
       if (!recs.length) { drives(); return; }
-      const text = A.toCsv(recs); const name = 'drive-' + new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19); recordings.push({ name, text });
+      const text = A.toCsv(recs); const name = 'drive-' + new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19); recordings.push({ name, text, kind: 'gearbox' });
       try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv' })); a.download = name + '.csv'; a.click(); } catch (e) {}
       showAnalysis([{ name, load: A.Load(text) }]);
+    };
+  }
+
+  // ---------------- engine drive recording (standard OBD) ----------------
+  const ENG = [[0x0C, 'rpm', d => (d[0] * 256 + d[1]) / 4], [0x0D, 'speed_kmh', d => d[0]], [0x05, 'coolant_c', d => d[0] - 40], [0x0F, 'intake_c', d => d[0] - 40], [0x0B, 'map_kpa', d => d[0]], [0x04, 'load_pct', d => d[0] * 100 / 255], [0x11, 'throttle_pct', d => d[0] * 100 / 255], [0x0E, 'advance_deg', d => d[0] / 2 - 64], [0x06, 'stft_pct', d => (d[0] - 128) * 100 / 128], [0x07, 'ltft_pct', d => (d[0] - 128) * 100 / 128], [0x14, 'o2_1_v', d => d[0] / 200], [0x15, 'o2_2_v', d => d[0] / 200], [0x42, 'ecu_v', d => (d[0] * 256 + d[1]) / 1000]];
+  function engineDrives() {
+    const b = header('Record & review a drive');
+    b.appendChild(toolBtn('● Record a drive', 'Log the engine (standard OBD) while you drive. A passenger holds the phone.', recordEngine));
+    const fi = document.createElement('input'); fi.type = 'file'; fi.accept = '.csv,text/csv'; fi.multiple = true; fi.style.display = 'none';
+    fi.onchange = async () => { const files = [...fi.files]; if (!files.length) return; const loaded = []; for (const f of files) loaded.push({ name: f.name.replace(/\.csv$/i, ''), load: A.Load(await f.text()) }); showAnalysis(loaded, engineDrives); };
+    b.appendChild(toolBtn('Open CSV file(s)', 'Review a saved engine log: value ranges and what looks out of range.', () => fi.click()));
+    b.appendChild(fi);
+    const mine = recordings.filter(r => r.kind === 'engine');
+    if (mine.length) { b.appendChild(el('div', 'section-h', 'RECORDED THIS SESSION')); mine.forEach(rec => b.appendChild(toolBtn(rec.name, 'Tap to review', () => showAnalysis([{ name: rec.name, load: A.Load(rec.text) }], engineDrives)))); }
+  }
+  function recordEngine() {
+    const b = header('Recording a drive', engineDrives);
+    b.appendChild(el('div', 'hint', 'A passenger holds the phone — do not touch it while driving. Press Stop when you are back.'));
+    const live = el('div', 'tb-t2', 'Starting…'); b.appendChild(live);
+    const recs = []; stopLive(); $('#tFooter').style.display = 'flex'; $('#tFooter').innerHTML = '';
+    const stop = el('button', 'stop', '■ Stop'); $('#tFooter').appendChild(stop);
+    liveTimer = setInterval(async () => {
+      const v = {}; for (const [pid, name, fn] of ENG) { try { const d = await ctx.obd.pid(pid); v[name] = d && d.length ? Math.round(fn(d) * 100) / 100 : ''; } catch (e) { v[name] = ''; } }
+      recs.push({ t: new Date(), v }); live.textContent = recs.length + ' readings · ' + v.rpm + ' rpm · ' + v.coolant_c + '°C · ' + v.throttle_pct + '% thr';
+    }, 350);
+    stop.onclick = () => {
+      stopLive(); $('#tFooter').style.display = 'none'; $('#tFooter').innerHTML = '';
+      if (!recs.length) { engineDrives(); return; }
+      const cols = ENG.map(e => e[1]); const esc = s => /[",\n]/.test(String(s)) ? '"' + String(s).replace(/"/g, '""') + '"' : s;
+      let text = 'time,' + cols.join(',') + '\n'; recs.forEach(r => text += r.t.toISOString().replace('T', ' ').slice(0, 21) + ',' + cols.map(c => esc(r.v[c] == null ? '' : r.v[c])).join(',') + '\n');
+      const name = 'engine-' + new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19); recordings.push({ name, text, kind: 'engine' });
+      try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv' })); a.download = name + '.csv'; a.click(); } catch (e) {}
+      showAnalysis([{ name, load: A.Load(text) }], engineDrives);
     };
   }
 
