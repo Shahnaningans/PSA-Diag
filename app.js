@@ -2,6 +2,7 @@
 (function () {
   'use strict';
   const D = window.Diag, C = window.Catalog, P = C.PARAMS, fmt = C.fmt, Dbx = window.Dbx;
+  const VERSION = 'psadiag web v1.4 · build 2026-11-22c';   // bump this on every change
   const $ = s => document.querySelector(s);
   const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
 
@@ -273,6 +274,7 @@
     $('#toolsBtn').onclick = openTools;
     $('#recBtn').onclick = () => { if (state.rows) stopRec(); else startRec(); };
     $('#logToggle').onclick = () => $('#logPanel').classList.toggle('open');
+    document.querySelectorAll('.ver').forEach(e => e.textContent = VERSION);
     showScreen('connect');
   });
 
